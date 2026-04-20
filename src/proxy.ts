@@ -45,13 +45,19 @@ function decodeMatrixId(rawId: string): string | MatrixError {
 }
 async function buildMultipartRedirect(targetLocation: string): Promise<Response> {
 	const boundary = `soliditas${Date.now().toString(16)}${Math.random().toString(16).slice(2)}`;
-
-	const metadataPart = Buffer.from(`--${boundary}\r\nContent-Type: application/json\r\n\r\n{}\r\n`, 'utf8');
-
-	const mediaHeaders = Buffer.from(`--${boundary}\r\nLocation: ${targetLocation}\r\n`, 'utf8');
-
-	const closingBoundary = Buffer.from(`\r\n--${boundary}--\r\n`, 'utf8');
-	const body = Buffer.concat([metadataPart, mediaHeaders, closingBoundary]);
+	const body = Buffer.from(
+		`--${boundary}\r\n` +
+			`Content-Type: application/json\r\n` +
+			`\r\n` +
+			`{}\r\n` +
+			`--${boundary}\r\n` +
+			`Content-Type: application/octet-stream\r\n` +
+			`Location: ${targetLocation}\r\n` +
+			`\r\n` +
+			`\r\n` +
+			`--${boundary}--\r\n`,
+		'utf8'
+	);
 
 	return new Response(body, {
 		headers: {
