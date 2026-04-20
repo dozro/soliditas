@@ -20,8 +20,6 @@ import { MatrixError } from './types';
 import { matrixInvalidParam } from './matrixError';
 import { fromMatrixID } from './mxcId';
 
-const GIPHYIDREGEX = /^[a-zA-Z0-9._/-]+$/;
-
 /**
  * helper function to decode matrix id, and either return the decoded id or a error response
  *
@@ -43,7 +41,7 @@ function decodeMatrixId(rawId: string): string | MatrixError {
 
 	return id;
 }
-async function buildMultipartRedirect(targetLocation: string): Promise<Response> {
+function buildMultipartRedirect(targetLocation: string): Response {
 	const boundary = `soliditas${Date.now().toString(16)}${Math.random().toString(16).slice(2)}`;
 	const body = Buffer.from(
 		`--${boundary}\r\n` +
@@ -73,11 +71,24 @@ async function buildMultipartRedirect(targetLocation: string): Promise<Response>
  * example id: yXPquATCb8kGk
  *
  * @param {string} id the id of the giphy media
- * @return {*}  {Response} the proxied request
- * @async
+ * @return {*}  {Response} the multipart response to return to the requesting homeserver
  */
-async function proxyGiphy(id: string): Promise<Response> {
+function proxyGiphy(id: string): Response {
 	return buildMultipartRedirect(`https://i.giphy.com/${id}.webp`);
+}
+
+function proxyTenor(id: string): Response {
+	return buildMultipartRedirect(`https://media.tenor.com/${id}/tenor.gif`);
+}
+
+/**
+ * proxy a klipy.com gif
+ * example for the cdn address format: https://static.klipy.com/ii/ffd4ac143e6335ac68951b787d3c1902/e8/3a/5LM0jRpL.gif
+ * @param {string} path the path on the cdn (for example `ffd4ac143e6335ac68951b787d3c1902/e8/3a/5LM0jRpL.gif`)
+ * @return {*}  {Response} the multipart response to return to the requesting homeserver
+ */
+function proxyKlipy(path: string): Response {
+	return buildMultipartRedirect(`https://static.klipy.com/ii/${path}`)
 }
 
 export async function proxyMediaCall(rawId: string): Promise<Response> {
@@ -85,18 +96,18 @@ export async function proxyMediaCall(rawId: string): Promise<Response> {
 	if (typeof decodedId !== 'string') {
 		return new Response(JSON.stringify(decodedId), { status: 400, statusText: 'error decoding media id' });
 	}
-	const isGiphy = rawId.startsWith('giphy_') || decodedId.startsWith('giphy_');
-	if (!isGiphy) {
-		return new Response(JSON.stringify(matrixInvalidParam("the identifier of the remote didn't match any supported remote identifier")), {
-			status: 400,
-			statusText: "the identifier of the remote didn't match any supported remote identifier",
-		});
+	const isGiphy: boolean = rawId.startsWith('giphy_') || decodedId.startsWith('giphy_');
+	const isTenor: boolean = rawId.startsWith('tenor_') || decodedId.startsWith('tenor_');
+	const isKlipy: boolean = rawId.startsWith('klipy_') || decodedId.startsWith('klipy_');
+	if (isTenor) {
+		return proxyTenor(decodedId);
+	} else if (isGiphy) {
+		return proxyGiphy(decodedId);
+	} else if (isKlipy) {
+		return proxyKlipy(decodedId);
 	}
-	if (!GIPHYIDREGEX.test(decodedId)) {
-		return new Response(JSON.stringify(matrixInvalidParam(`invalid giphy id (${decodedId})`)), {
-			status: 400,
-			statusText: 'error decoding media id',
-		});
-	}
-	return await proxyGiphy(decodedId);
+	return new Response(JSON.stringify(matrixInvalidParam("the identifier of the remote didn't match any supported remote identifier")), {
+		status: 400,
+		statusText: "the identifier of the remote didn't match any supported remote identifier",
+	});
 }
