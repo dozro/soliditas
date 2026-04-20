@@ -4,7 +4,7 @@
  */
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
-	"name": "mxc-cf-worker-proxy",
+	"name": "soliditas",
 	"main": "src/index.ts",
 	"compatibility_date": "2026-04-17",
 	"observability": {
@@ -31,7 +31,7 @@
 	 * Note: Use secrets to store sensitive data.
 	 * https://developers.cloudflare.com/workers/configuration/secrets/
 	 */
-	"vars": {  "HOSTNAME": "example.org", "PORT": 443 }
+	"vars": {  "HOSTNAME": "example.org", "SERVERNAME": "example.org",  "PORT": 443 }
 	/**
 	 * Static Assets
 	 * https://developers.cloudflare.com/workers/static-assets/binding/

@@ -20,7 +20,7 @@ import { MatrixError } from './types';
 import { matrixInvalidParam } from './matrixError';
 import { fromMatrixID } from './mxcId';
 
-const MXCIDREGEX = /^[a-zA-Z0-9._-]+$/;
+const GIPHYIDREGEX = /^[a-zA-Z0-9._/-]+$/;
 
 /**
  * helper function to decode matrix id, and either return the decoded id or a error response
@@ -41,29 +41,56 @@ function decodeMatrixId(rawId: string): string | MatrixError {
 		};
 	}
 
-	if (!MXCIDREGEX.test(id)) {
-		// the id isn't in a matrix legal format
-		return matrixInvalidParam(`invalid mxc id (${id})`);
-	}
-
 	return id;
 }
+async function buildMultipartRedirect(targetLocation: string): Promise<Response> {
+	const boundary = `soliditas${Date.now().toString(16)}${Math.random().toString(16).slice(2)}`;
 
-function proxyGiphy(id: string): Response {
-	const strippedId = id.startsWith('giphy_') ? id.slice('giphy_'.length) : id;
-	return Response.redirect(`https://media.giphy.com/${strippedId}`, 307);
+	const metadataPart = Buffer.from(`--${boundary}\r\nContent-Type: application/json\r\n\r\n{}\r\n`, 'utf8');
+
+	const mediaHeaders = Buffer.from(`--${boundary}\r\nLocation: ${targetLocation}\r\n`, 'utf8');
+
+	const closingBoundary = Buffer.from(`\r\n--${boundary}--\r\n`, 'utf8');
+	const body = Buffer.concat([metadataPart, mediaHeaders, closingBoundary]);
+
+	return new Response(body, {
+		headers: {
+			'Content-Type': `multipart/mixed; boundary=${boundary}`,
+			'Content-Length': `${body.length}`,
+		},
+		status: 200,
+	});
 }
 
-export function proxyMediaCall(rawId: string): Response {
+/**
+ * proxy a giphy call
+ * example id: yXPquATCb8kGk
+ *
+ * @param {string} id the id of the giphy media
+ * @return {*}  {Response} the proxied request
+ * @async
+ */
+async function proxyGiphy(id: string): Promise<Response> {
+	return buildMultipartRedirect(`https://i.giphy.com/${id}.webp`);
+}
+
+export async function proxyMediaCall(rawId: string): Promise<Response> {
 	const decodedId = decodeMatrixId(rawId);
 	if (typeof decodedId !== 'string') {
 		return new Response(JSON.stringify(decodedId), { status: 400, statusText: 'error decoding media id' });
 	}
-	if (rawId.startsWith('giphy_') || decodedId.startsWith('giphy_')) {
-		return proxyGiphy(decodedId);
+	const isGiphy = rawId.startsWith('giphy_') || decodedId.startsWith('giphy_');
+	if (!isGiphy) {
+		return new Response(JSON.stringify(matrixInvalidParam("the identifier of the remote didn't match any supported remote identifier")), {
+			status: 400,
+			statusText: "the identifier of the remote didn't match any supported remote identifier",
+		});
 	}
-	return new Response(JSON.stringify(matrixInvalidParam("the identifier of the remote didn't match any supported remote identifier")), {
-		status: 400,
-		statusText: "the identifier of the remote didn't match any supported remote identifier",
-	});
+	if (!GIPHYIDREGEX.test(decodedId)) {
+		return new Response(JSON.stringify(matrixInvalidParam(`invalid giphy id (${decodedId})`)), {
+			status: 400,
+			statusText: 'error decoding media id',
+		});
+	}
+	return await proxyGiphy(decodedId);
 }
